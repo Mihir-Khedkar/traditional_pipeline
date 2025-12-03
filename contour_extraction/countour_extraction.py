@@ -55,3 +55,42 @@ class ContourExtraction:
 		canvas = cv2.fillPoly(image, contours, (0,0,0))
 		print("Filled the contours on the canvas")
 		return canvas
+		
+class BoundingBoxCreation:
+
+	def __init__(self, image: np.ndarray, contours: List[np.ndarray], thresh_area: int=50) -> None:
+		
+		print("Removing Noisy Shapes")
+		self.raw_contours = contours
+		filtered_contours = []
+		area_values = []
+		for cnt in contours:	
+			area = cv2.contourArea(cnt)
+			area_values.append(area)
+			if area > thresh_area:
+				filtered_contours.append(cnt)
+		self.contours = filtered_contours
+		self.image = image
+		self.areas = area_values
+		
+	def shapeAreas(self) -> List[float]:
+		return self.areas	
+				
+	def createBoundingBoxes(self) -> np.ndarray:
+		print("Creating Bounding Boxes")
+		
+		for i, cnt in enumerate(self.contours):
+			x,y,w,h = cv2.boundingRect(cnt)
+			cv2.rectangle(self.image, (x,y), (x+w,y+h), (255,0,0), 2)
+			
+			rect = cv2.minAreaRect(cnt)
+			box = cv2.boxPoints(rect)
+			box = np.int0(box)
+			cv2.drawContours(self.image, [box], 0, (0,0,255), 2)
+			
+			# print(f"Contour {i}: area={cv2.contourArea(cnt)}, AABB=({x},{y},{w},{h}), rotated rectangle={rect}")
+			
+		return self.image
+		
+	def dataHistogram(self) -> Tuple[np.ndarray, np.ndarray]:
+		return self.raw_contours, self.contours

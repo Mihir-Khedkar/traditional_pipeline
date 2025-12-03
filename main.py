@@ -4,7 +4,7 @@ from image_processing.edge_detection import EdgeDetector
 from image_processing.segmentation import Segmentation
 from shape_descriptors.shape_representation import ContourAnalysis
 from utilities.histograms import Histogram
-from contour_extraction.countour_extraction import Morphological, ContourExtraction
+from contour_extraction.countour_extraction import Morphological, ContourExtraction, BoundingBoxCreation
 
 import os
 import numpy as np
@@ -141,4 +141,50 @@ def morphological_processing(image):
 	closings = morphing.close(openings, iterations=1)
 	cv2.imwrite(os.path.join(output_path, "Opening_example.jpg"), closings)
 
-morphological_processing(exp_image)
+# morphological_processing(exp_image) 
+
+shape_processing = BoundingBoxCreation(image, contours)
+bbimage = shape_processing.createBoundingBoxes()
+
+cv2.imwrite(os.path.join(output_path, "BB_Image.jpg"), bbimage)
+
+areas = shape_processing.shapeAreas()
+
+for i in range(10):
+	areas.remove(max(areas))
+
+# print(f"Top 10 Area Values: {sorted(areas, reverse=True)[:10]}")
+
+def split_to_median(lst):
+    sorted_lst = sorted(lst)
+    n = len(sorted_lst)
+    if n % 2 == 1:
+        median = sorted_lst[n // 2]
+    else:
+        median = (sorted_lst[n // 2 - 1] + sorted_lst[n // 2]) / 2
+		
+    result_low = [x for x in sorted_lst if x <= median]
+    result_high = [x for x in sorted_lst if x > median]
+
+    return result_low, result_high, median
+
+
+def plot2histograms(list1, file_name, lower_end, higher_end, bins=30 ):
+	plt.figure(figsize=(8,5))
+	
+	plt.hist(list1, bins=bins, alpha=0.5, label="Shape Area Spread")
+	
+	plt.xlim(lower_end, higher_end)
+	
+	plt.xlabel("Area of shapes")
+	plt.ylabel("Frequency")
+	plt.title("Shape Area Spread")
+	
+	plt.legend()
+	plt.tight_layout()
+	plt.savefig(os.path.join(output_path, file_name), dpi=300)
+
+resl, resh, med = split_to_median(areas)
+print(f"The median value is: {med}")	
+plot2histograms(resl, "Lower_Spec.png",0, med, bins=100)
+plot2histograms(resh, "Higher_Spec.png", med, max(areas), bins=100)
