@@ -6,7 +6,7 @@ class EdgeDetector:
 		self.image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 		
 	def canny_edge(self, lower_threshold=100, upper_threshold=200):
-		edges = cv2.Canny(self.image, lower_threshold, upper_threshold)
+		edges = cv2.Canny(self.image, lower_threshold, upper_threshold, L2gradient=True)
 		return edges
 	
 	def sobel(self, dx=1, dy=1, ksize=3):

@@ -2,31 +2,9 @@ import numpy as np
 import cv2
 
 class ContourAnalysis:
-	def __init__(self, image, binary):
-		self.image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-		self.label = binary
-		
-	def morph_preprocess(self, close_size=5, open_size=3):
-		kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (close_size, close_size))
-		kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (open_size, open_size))
-		
-		closed = cv2.morphologyEx(self.label, cv2.MORPH_CLOSE, kernel_close)
-		opened = cv2.morphologyEx(closed, cv2.MORPH_OPEN, kernel_open)
-		
-		self.processed = opened
-		return self.processed
-		
-	def extract_contours(self):
-		contours, hierarchy = cv2.findContours(
-			self.processed,
-			cv2.RETR_TREE,
-			cv2.CHAIN_APPROX_SIMPLE
-		)
-		
-		self.contours = contours
-		self.hierarchy = hierarchy
-		
-		return contours, hierarchy
+	def __init__(self, contour, image):
+		self.image = image
+		self.contour = contour
 		
 	def compute_features(self, contour):
 		features = {}

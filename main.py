@@ -19,26 +19,16 @@ output_path = r'C:\Users\Mihir Khedkar\Desktop\traditional_pipeline\outputs'
 # IMAGE LOADER
 
 image = cv2.imread(os.path.join(input_path, "trial.jpg"))
-exp_image = cv2.imread(os.path.join(output_path, "Filled_shapes.jpg"))
+exp_image = cv2.imread(os.path.join(output_path, "seg_prewitt.jpg"))
 
 # IMAGE PRE-PROCESSING MODULE
-gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)	
-
-pre_processed_img = PreProcessor(image)
-pre_processed_img.gaussian_blur()
-pre_processed_img.bilateral_denoise()
-prepim = pre_processed_img.histogram_equalization()
-
-cv2.imwrite(os.path.join(output_path, "pre_processed.jpg"), prepim)	
 
 # EDGE DETECTION
 
-print("Start Edge Extraction")
 
-preprosimg = cv2.imread(os.path.join(output_path, "pre_processed.jpg"))
 
 def edge_detection_process():
-	edges_det = EdgeDetector(preprosimg)
+	edges_det = EdgeDetector(image)
 	cannyimg  = edges_det.canny_edge()
 	cv2.imwrite(os.path.join(output_path, "canny.jpg"), cannyimg)
 	
@@ -95,13 +85,7 @@ def morphing_process():
 	morphing_time(np.invert(sobel_seg), "seg_sobel.jpg")
 	morphing_time(scharr_seg, "seg_scharr.jpg")
 
-# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-# cannyimg, sobelimg, scharrimg, prewittimg = edge_detection_process()
-# image_seg, prewitt_seg, canny_seg, sobel_seg, scharr_seg = segmenation_process()
-# morphing_process()
-# ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-# HISTOGRAM GENERATION - GRAYSCALE & PREPROCESSED IMAGE
+# HISTOGRAM GENERATION 
 def histogram_process():
 	img_list = [gray_image, prepim]
 	labels_list = ['Grayscale Image','Preprocessed Image']
@@ -110,29 +94,49 @@ def histogram_process():
 
 # SHAPE ANALSIS
 
-edged_img = cv2.imread(os.path.join(output_path, "morphed_prewitt.jpg"))
+def contour_list_manipulation(clist, median_val):
+	contours = []
+	areas = []
+	ori_list = []
+	initial_value = len(clist)
+	for elem in clist:
+		pts , area = elem
+		if area >= median_val:
+			contours.append(pts)
+			areas.append(area)
+			ori_list.append((pts, area))
+		
+	max_area_value = max(areas)
 
-contour_extraction_obj = ContourExtraction()
-bin = contour_extraction_obj.preprocess(edged_img)
-contours, binary = contour_extraction_obj.extract(bin)
+	for i, elem in enumerate(ori_list):
+		pts, area = elem
+		if area == max_area_value:
+			ori_list.pop(i)
+			break
 
-print(f"Before eliminating smaller shapes: {len(contours)}")
+	final_value = len(ori_list)
+	print(f"The List has been reduced to {initial_value - final_value}")
+	return ori_list
 
-value_list = []
-for contour in contours:
-	value_list.append(len(contour))
+def median_value(lst):
+    sorted_lst = sorted(lst)
+    n = len(sorted_lst)
+    if n % 2 == 1:
+        median = sorted_lst[n // 2]
+    else:
+        median = (sorted_lst[n // 2 - 1] + sorted_lst[n // 2]) / 2
 
-for index, contour in enumerate(contours):
-	if len(contour) < 10:
-		contours.pop(index)
+    return median
 
-print(f"After eliminating smaller shapes: {len(contours)}")
+def contour_fine_tuning(clist):
+	areas = []
+	for elem in clist:
+		pts, area = elem
+		areas.append(area)
 
-canvas = contour_extraction_obj.draw(image, contours)
-cv2.imwrite(os.path.join(output_path, "Shape_analysis.jpg"), canvas)
-
-canvas = contour_extraction_obj.fill(image, contours)
-cv2.imwrite(os.path.join(output_path, "Filled_shapes.jpg"), canvas)
+	med_areas = median_value(areas)
+	ori_list = contour_list_manipulation(clist, med_areas)
+	return ori_list
 
 def morphological_processing(image):
 	print("Erosion Process happening")
@@ -140,51 +144,87 @@ def morphological_processing(image):
 	openings = morphing.open(image, iterations=1)
 	closings = morphing.close(openings, iterations=1)
 	cv2.imwrite(os.path.join(output_path, "Opening_example.jpg"), closings)
+ 
+ # Contour Processing
 
-# morphological_processing(exp_image) 
+def trial_contour():
+	image = cv2.imread(os.path.join(input_path, "trial_shapes.jpg"))
 
-shape_processing = BoundingBoxCreation(image, contours)
-bbimage = shape_processing.createBoundingBoxes()
+	object_cnt = ContourExtraction(approximation=cv2.CHAIN_APPROX_NONE)
+	bin = object_cnt.preprocess(image)
+	contours, heirarchy = object_cnt.extract(bin)
+	for cnt in contours:
+		for pt in cnt:
+			x, y = pt[0]
+			cv2.circle(image, (x, y), radius=5, color=(0, 255, 0), thickness=-1)
+	cv2.imwrite(os.path.join(output_path, "no_chain_approx.jpg"), image)
 
-cv2.imwrite(os.path.join(output_path, "BB_Image.jpg"), bbimage)
-
-areas = shape_processing.shapeAreas()
-
-for i in range(10):
-	areas.remove(max(areas))
-
-# print(f"Top 10 Area Values: {sorted(areas, reverse=True)[:10]}")
-
-def split_to_median(lst):
-    sorted_lst = sorted(lst)
-    n = len(sorted_lst)
-    if n % 2 == 1:
-        median = sorted_lst[n // 2]
-    else:
-        median = (sorted_lst[n // 2 - 1] + sorted_lst[n // 2]) / 2
-		
-    result_low = [x for x in sorted_lst if x <= median]
-    result_high = [x for x in sorted_lst if x > median]
-
-    return result_low, result_high, median
-
-
-def plot2histograms(list1, file_name, lower_end, higher_end, bins=30 ):
-	plt.figure(figsize=(8,5))
+if __name__=='__main__':
 	
-	plt.hist(list1, bins=bins, alpha=0.5, label="Shape Area Spread")
-	
-	plt.xlim(lower_end, higher_end)
-	
-	plt.xlabel("Area of shapes")
-	plt.ylabel("Frequency")
-	plt.title("Shape Area Spread")
-	
-	plt.legend()
-	plt.tight_layout()
-	plt.savefig(os.path.join(output_path, file_name), dpi=300)
+	gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)	
+	pre_processed_img = PreProcessor(image)
+	pre_processed_img.gaussian_blur()
+	pre_processed_img.bilateral_denoise()
+	prepim = pre_processed_img.histogram_equalization()
+	cv2.imwrite(os.path.join(output_path, "pre_processed.jpg"), prepim)
 
-resl, resh, med = split_to_median(areas)
-print(f"The median value is: {med}")	
-plot2histograms(resl, "Lower_Spec.png",0, med, bins=100)
-plot2histograms(resh, "Higher_Spec.png", med, max(areas), bins=100)
+	print("Start Edge Extraction")
+	preprosimg = cv2.imread(os.path.join(output_path, "pre_processed.jpg"))
+
+	cannyimg, sobelimg, scharrimg, prewittimg = edge_detection_process()
+	# image_seg, prewitt_seg, canny_seg, sobel_seg, scharr_seg = segmenation_process()
+	# morphing_process()
+
+	edge_image_list = [cannyimg, sobelimg, scharrimg, prewittimg]
+
+
+
+	# edged_img = cv2.imread(os.path.join(output_path, "canny.jpg"))
+
+	contour_extraction_obj = ContourExtraction(approximation=cv2.CHAIN_APPROX_NONE)
+	bin = contour_extraction_obj.preprocess(cannyimg)
+	contours, binary = contour_extraction_obj.extract(bin)
+	area_contour_list = contour_extraction_obj.shapeAreas(contours)	
+	
+	areas_list = []
+	for elem in area_contour_list:
+		pts, area = elem
+		areas_list.append(pts)
+
+	# new_contours_areas = contour_fine_tuning(area_contour_list)
+	# newer_contour = contour_fine_tuning(new_contours)
+	# morphological_processing(exp_image)
+
+	# new_contours = []
+	# for elem in new_contours_areas:
+	# 	pts, areas = elem
+	# 	new_contours.append(pts)
+
+	canvas = contour_extraction_obj.draw(image, contours)
+	cv2.imwrite(os.path.join(output_path, "Shape_analysis.jpg"), canvas)
+	# canvas = contour_extraction_obj.fill(image, contours)
+	# cv2.imwrite(os.path.join(output_path, "Filled_shapes.jpg"), canvas)
+
+	shape_processing = BoundingBoxCreation(canvas, areas_list)
+	reduced_image = shape_processing.createBoundingBoxes()
+
+	cv2.imwrite(os.path.join(output_path, "ori_image.jpg"), reduced_image)
+	# cv2.imwrite(os.path.join(output_path, "Reduced_Image.jpg"), reduced_image)
+	# cv2.imwrite(os.path.join(output_path, "New_formatted_Image.jpg"), edge_image)
+
+
+	for element in area_contour_list:
+		pts, areas = element	
+		print(f"The areas are: {areas}, and the cotour point list is: {pts}")
+	# trial_contour()
+
+
+
+
+
+
+
+
+
+	# histogram_obj = Histogram("Areas Distribution", "Areas", "Frequency")
+	# histogram_obj.plot2histograms(areas_list, "Areas_Histogram.jpg", output_path, higher_end=500, bins=300)
