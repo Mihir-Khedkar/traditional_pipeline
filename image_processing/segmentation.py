@@ -1,3 +1,4 @@
+from email.mime import image
 import cv2 
 import numpy as np 
 
@@ -57,9 +58,7 @@ class Segmentation:
 		
 		return mask
 		
-	def watershed_segmentation(self):
-		ret, thresh = cv2.threshold(self.image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-		
+	def watershed_segmentation(self, image, thresh):
 		kernel = np.ones((3,3), np.uint8)
 		opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
 		
@@ -75,10 +74,11 @@ class Segmentation:
 		markers = markers + 1
 		markers[unknown == 255] = 0
 		
-		result = self.image.copy()
+		# result = image.copy()
+		result = np.copy(image)
 		cv2.watershed(result, markers)
-		cv2.watershed(result, markers)
-		cv2.watershed(result, markers)
-		result[markers == -1] = [0,0,255] 
+		# cv2.watershed(result, markers)
+		# cv2.watershed(result, markers)
+		result[markers == -1] = [255,0,255] 
 		
 		return result

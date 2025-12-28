@@ -31,7 +31,6 @@ class ContourExtraction:
 		self.approximation = approximation
 		
 	def preprocess(self, image: np.ndarray) -> np.ndarray:
-		print("Pre-processing and thresholding")
 		if len(image.shape) == 3:
 			gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 		else:
@@ -43,23 +42,19 @@ class ContourExtraction:
 		
 	def extract(self, image: np.ndarray) -> Tuple[List[np.ndarray], np.ndarray]:
 		contours, hierarchy = cv2.findContours(image, self.retrieval_mode, self.approximation)
-		print(f"Extracted contours from the Given Image {len(contours)}")
 		self.contours = contours
 		return contours, hierarchy
 		
 	def draw(self, image: np.ndarray, contours: List[np.ndarray], thickness: int=2) -> np.ndarray:
 		canvas = image.copy()
-		cv2.drawContours(canvas, contours, contourIdx=-1, color=(0, 0, 255), thickness=thickness)
-		print("Drawn the contours on the canvas")
+		cv2.drawContours(canvas, contours, contourIdx=-1, color=(0, 255, 255), thickness=thickness)
 		return canvas
 		
 	def fill(self, image: np.ndarray, contours: List[np.ndarray]) -> np.ndarray:
-		canvas = cv2.fillPoly(image, contours, (0,255,0))
-		print("Filled the contours on the canvas")
+		canvas = cv2.fillPoly(image, contours, (0,255,255))
 		return canvas
 	
 	def shapeAreas(self, contours: List[np.ndarray]) -> List[Tuple[np.ndarray, float]]:
-		print("Calculation of shape Areas")
 		area_values = []
 		for cnt in contours:	
 			area = cv2.contourArea(cnt)
@@ -74,20 +69,22 @@ class BoundingBoxCreation:
 
 
 	def createBoundingBoxes(self, fill: bool=False ) -> np.ndarray:
-		print("Creating Bounding Boxes")
+		bb_annot = []
+		oriented_bb_annot = []
+
 		for cnt in self.contours:
 			x,y,w,h = cv2.boundingRect(cnt)
+			bb_annot.append((x,y,w,h))
+
 			cv2.rectangle(self.image, (x,y), (x+w,y+h), (255,0,0), 2)
 			rect = cv2.minAreaRect(cnt)
+			oriented_bb_annot.append(rect)
+			
 			box = cv2.boxPoints(rect)
 			box = np.int0(box)
 			if fill == True:
 				cv2.drawContours(self.image, [box], 0, (0,0,0), thickness=cv2.filled)
 			else:
 				cv2.drawContours(self.image, [box], 0, (0,0,255), 2)
-			# print(f"Contour {i}: area={cv2.contourArea(cnt)}, AABB=({x},{y},{w},{h}), rotated rectangle={rect}")
-			
-		return self.image
-		
-	def dataHistogram(self) -> Tuple[np.ndarray, np.ndarray]:
-		return self.raw_contours, self.contours
+				
+		return bb_annot, oriented_bb_annot, self.image

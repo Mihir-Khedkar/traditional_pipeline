@@ -4,7 +4,6 @@ import numpy as np
 class EdgeDetector:
 	def __init__(self, image):
 		self.image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-		print(f"Shape of image: {self.image.shape}")
 		
 	def canny_edge(self, lower_threshold=100, upper_threshold=200):
 		edges = cv2.Canny(self.image, lower_threshold, upper_threshold, L2gradient=True)
@@ -45,7 +44,6 @@ class EdgeDetector:
 		self.ang = ang
 
 	def canny_non_max_suppression(self, wk_multiplier=0.1, str_multiplier=0.5):
-		print("Performing non-maximum suppresion on the filtered image")
 		mag = self.mag
 		max_mag = np.max(mag)
 		

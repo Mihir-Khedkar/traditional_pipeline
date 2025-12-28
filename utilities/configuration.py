@@ -1,12 +1,9 @@
-import json
-import os
+from datetime import datetime
+class Logger():
+    def clog(self, message):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S:%f")
+        print(f"[{timestamp}] {message}")
 
-config = {}
-
-config["input_path"] = r'C:\Users\Mihir Khedkar\Desktop\traditional_pipeline\inputs'
-config["output_path"] = r'C:\Users\Mihir Khedkar\Desktop\traditional_pipeline\outputs'
-
-filename = r'C:\Users\Mihir Khedkar\Desktop\traditional_pipeline\config.json'
-
-with open(filename, 'w') as file:
-    json.dump(config, file, indent=4)
+    def minilogger(self, message):
+        timestamp = datetime.now().strftime("%H:%M:%S:%f")
+        print(f"           [{timestamp}] {message}")
