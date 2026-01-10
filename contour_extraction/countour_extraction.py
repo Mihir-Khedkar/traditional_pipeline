@@ -43,7 +43,7 @@ class ContourExtraction:
 	def extract(self, image: np.ndarray) -> Tuple[List[np.ndarray], np.ndarray]:
 		contours, hierarchy = cv2.findContours(image, self.retrieval_mode, self.approximation)
 		self.contours = contours
-		return contours, hierarchy
+		return list(contours), hierarchy
 		
 	def draw(self, image: np.ndarray, contours: List[np.ndarray], thickness: int=2) -> np.ndarray:
 		canvas = image.copy()
