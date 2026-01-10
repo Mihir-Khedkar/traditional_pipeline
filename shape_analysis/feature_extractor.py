@@ -21,7 +21,6 @@ class HoughLineDetector:
 
     @staticmethod
     def draw_standard(image: np.ndarray, lines: np.ndarray, color: Tuple[int, int, int] = (0, 0, 255), thickness: int = 2) -> np.ndarray:
-
         output = image.copy()
 
         for line in lines:

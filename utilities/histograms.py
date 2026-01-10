@@ -14,7 +14,7 @@ class Histogram:
 		self.label = label
 		logger = Logger()
 		self.logger = logger
-		self.logger.minilogger("Image ready for Histogram creation")
+		# self.logger.minilogger("Image ready for Histogram creation")
 	
 	def create_histogram(self, img_list, labels, output_path = r'C:\Users\Mihir Khedkar\Desktop\traditional_pipeline\outputs', xlbl = "Pixel Intensity", ylbl  = "Frequency", lower_limit=0, high_limit=256):
 		
@@ -41,7 +41,7 @@ class Histogram:
 		file_path = os.path.join(output_path, file_name)
 		plt.savefig(file_path, bbox_inches='tight')
 		
-		self.logger.minilogger(f"Successfully created histogram {file_name}")
+		# self.logger.minilogger(f"Successfully created histogram {file_name}")
 
 	def plot2histograms(self, list1, file_name, output_path, lower_end=0, higher_end=500, bins=30):
 		plt.figure(figsize=(8,5))
@@ -53,7 +53,7 @@ class Histogram:
 		plt.legend()
 		plt.tight_layout()
 		plt.savefig(os.path.join(output_path, file_name), dpi=300)
-		self.logger.minilogger(f"Successfully generated Histogram {file_name} at {output_path}")
+		# self.logger.minilogger(f"Successfully generated Histogram {file_name} at {output_path}")
 
 	def create_intensity_histogram(self, img, header=None, bins=256, hist_range=(0,256), output_path=r'C:\Users\Mihir Khedkar\Desktop\traditional_pipeline\outputs', file_name=None, color='blue', annotate=True, annotate_every=1, cmap=None, show=False):
 		"""
@@ -126,7 +126,7 @@ class Histogram:
 		else:
 			plt.close()
 
-		self.logger.minilogger(f"Saved intensity histogram to {file_path}")
+		# self.logger.minilogger(f"Saved intensity histogram to {file_path}")
 
 		return hist, bin_edges
 
@@ -183,7 +183,7 @@ class Histogram:
 		plt.title(self.title + ' - 2D Patch Histogram')
 		plt.xlabel(f'Patch X (width={pw}px)')
 		plt.ylabel(f'Patch Y (height={ph}px)')
-
+		plt.axis('off')
 		if file_name is None:
 			file_name = f"{self.title}_2d_patch_histogram.png"
 
@@ -197,7 +197,7 @@ class Histogram:
 		else:
 			plt.close()
 
-		self.logger.minilogger(f"Saved 2D patch histogram to {file_path}")
+		# self.logger.minilogger(f"Saved 2D patch histogram to {file_path}")
 
 		return counts
 
@@ -235,4 +235,4 @@ class Histogram:
 		fig_name = self.title + "_histogram.png"
 		file_path = os.path.join(output_path, fig_name)
 		plt.savefig(file_path, dpi=300)
-		self.logger.minilogger(f"Successfully generated Histogram {fig_name} at {output_path}")
+		# self.logger.minilogger(f"Successfully generated Histogram {fig_name} at {output_path}")

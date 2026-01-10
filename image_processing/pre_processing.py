@@ -9,8 +9,11 @@ class PreProcessor:
 		
 	def gaussian_blur(self, kernel_size=(5,5), sigma=0):
 		return cv2.GaussianBlur(self.image, kernel_size, sigma)
-		
-	def bilateral_denoise(self, diameter=9, sigma_color=75, sigma_space=75):
+	
+	def median_blur(self, kernel_size=5):
+		return cv2.medianBlur(self.image, kernel_size)
+	
+	def bilateral_denoise(self, diameter=21, sigma_color=175, sigma_space=175):
 		return cv2.bilateralFilter(self.image, diameter, sigma_color, sigma_space)
 	
 	def histogram_equalization(self):

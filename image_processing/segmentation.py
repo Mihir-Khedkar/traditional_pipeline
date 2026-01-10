@@ -1,11 +1,12 @@
 from email.mime import image
 import cv2 
 import numpy as np 
+from skimage.filters import threshold_multiotsu
+
 
 class Segmentation:
 	def __init__(self, image):
 		self.image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-		print("Received Image for Segmentation")
 		
 	def threshold_global(self, T):
 		_, binary = cv2.threshold(self.image, T, 255, cv2.THRESH_BINARY)
@@ -32,7 +33,16 @@ class Segmentation:
 			block_size, c
 		)
 		return binary
+
+	def multi_threshold_otsu(self, regions=3, getThresholds=False):
+		thresholds = threshold_multiotsu(self.image, classes=regions)
+		segmented = np.digitize(self.image, bins=thresholds)
+		if getThresholds:
+			return segmented, thresholds
+		else:
+			return segmented * (255 // regions)
 	
+
 	def region_growing(self, seed_point, threshold=5):
 		x,y = seed_point
 		seed_value = self.gray[y,x]
