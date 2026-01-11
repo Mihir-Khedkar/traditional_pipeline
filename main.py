@@ -18,8 +18,8 @@ import colorsys
 # █▀█ ▄▀█ ▀█▀ █░█ █▀
 # █▀▀ █▀█ ░█░ █▀█ ▄█
 
-input_path = r'C:\Users\Mihir Khedkar\Desktop\traditional_pipeline\inputs'
-output_path = r'C:\Users\Mihir Khedkar\Desktop\traditional_pipeline\outputs'
+input_path = r'inputs'
+output_path = r'outputs'
 logger = Logger()
 
 
