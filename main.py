@@ -343,6 +343,25 @@ def line_color_bgr(i, saturation=0.9, value=0.9):
         int(r * 255)
     )
 
+def max_pool_down_up(image, k):
+    h, w = image.shape
+
+    h_trim = (h // k) * k
+    w_trim = (w // k) * k
+    img = image[:h_trim, :w_trim]
+
+    pooled = img.reshape(h_trim // k, k,w_trim // k, k).max(axis=(1, 3))
+
+    upsampled = cv2.resize(pooled, (w_trim, h_trim), interpolation=cv2.INTER_LINEAR)
+
+
+    out = np.zeros_like(image)
+    out[:h_trim, :w_trim] = upsampled
+
+    return out
+
+
+
 
 
 
@@ -445,6 +464,16 @@ def contour_extraction_module():
 
 
 
+# █▀▀ █▀█ █▄░█ ▀█▀ █▀█ █░█ █▀█   █▀█ █▀▀ █▀▀ █ █▄░█ █ █▄░█ █▀▀
+# █▄▄ █▄█ █░▀█ ░█░ █▄█ █▄█ █▀▄   █▀▄ ██▄ █▀░ █ █░▀█ █ █░▀█ █▄█
+
+def contour_image_refinement():
+	image = cv2.imread(os.path.join(output_path, "final_contours_step.jpg"))
+	output = max_pool_down_up(edges, 20)
+	median_filtered_img = cv2.medianBlur(output, 25)
+	cv2.imwrite(os.path.join(output_path, "final_contours_step_DU.jpg"), final_image)
+
+
 
 # █▀▀ █▀▀ ▄▀█ ▀█▀ █░█ █▀█ █▀▀   █▀▀ ▀▄▀ ▀█▀ █▀█ ▄▀█ █▀▀ ▀█▀ █ █▀█ █▄░█
 # █▀░ ██▄ █▀█ ░█░ █▄█ █▀▄ ██▄   ██▄ █░█ ░█░ █▀▄ █▀█ █▄▄ ░█░ █ █▄█ █░▀█
@@ -453,7 +482,7 @@ def contour_extraction_module():
 def feature_extraction_module():
     logger.clog("Applying Hough Line Detection on the final morphed image")
     
-    image = cv2.imread(os.path.join(output_path, "final_contours_step.jpg"), cv2.IMREAD_GRAYSCALE)
+    image = cv2.imread(os.path.join(output_path, "final_contours_step_DU.jpg"), cv2.IMREAD_GRAYSCALE)
     ori_image1 = cv2.imread(os.path.join(input_path, FILENAME))
     ori_image2 = cv2.imread(os.path.join(input_path, FILENAME))
 
