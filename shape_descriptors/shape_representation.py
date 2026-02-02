@@ -19,6 +19,7 @@ class ContourAnalysis:
 		
 		hull = cv2.convexHull(contour)
 		hull_area  = cv2.contourArea(hull)
+		features["convex_hull"] = hull_area
 		features["extent"] = area / (hull_area + 1e-5)
 		features["solidity"] = area / (hull_area + 1e-5)
 		

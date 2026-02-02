@@ -6,8 +6,8 @@ from typing import Optional, Tuple
 class HoughLineDetector:
 
     def __init__(self, canny_edges: np.ndarray):
-        if canny_edges.ndim != 2:
-            raise ValueError("Canny image must be a single-channel (grayscale) image.")
+        # if canny_edges.ndim != 2:
+        #     raise ValueError("Canny image must be a single-channel (grayscale) image.")
 
         self.edges = canny_edges.copy()
 

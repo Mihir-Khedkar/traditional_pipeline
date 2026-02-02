@@ -47,7 +47,7 @@ class ContourExtraction:
 		
 	def draw(self, image: np.ndarray, contours: List[np.ndarray], thickness: int=2) -> np.ndarray:
 		canvas = image.copy()
-		cv2.drawContours(canvas, contours, contourIdx=-1, color=(0, 0, 255), thickness=thickness)
+		cv2.drawContours(canvas, contours, contourIdx=-1, color=(255, 255, 255), thickness=thickness)
 		return canvas
 		
 	def fill(self, image: np.ndarray, contours: List[np.ndarray]) -> np.ndarray:

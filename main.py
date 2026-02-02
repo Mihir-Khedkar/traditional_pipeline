@@ -27,25 +27,30 @@ logger = Logger()
 # ▄█ ░█░ █▀█ ░█░ █ █▄▄   ▀▄▀ █▀█ █▀▄ █ █▀█ █▄█ █▄▄ ██▄ ▄█
 
 FILENAME = r"trial_small.jpg"
+raw_image = cv2.imread(os.path.join(input_path, FILENAME))
+H, W ,C = raw_image.shape
 
-UPPER_THRESHOLD = 200
+SEGMENTED_REGIONS = 4
+
+UPPER_THRESHOLD = 300
 LOWER_THRESHOLD = int(0.44*UPPER_THRESHOLD)
 
-THRESHOLD_PROBAB = 500
-MIN_LINE_LENGTH = 578
-MAX_LINE_GAP = 45
+THRESHOLD_PROBAB = int(0.3*min(H,W))
+MIN_LINE_LENGTH = 0.05*W
+MAX_LINE_GAP = 10
 
-THRESHOLD_STANDARD = 250
+THRESHOLD_STANDARD = int(0.3*min(H,W))
 
 BIN_SELECTION_FILTER = 2
-CONTOUR_NUMBER_FILTER = 50
+CONTOUR_NUMBER_FILTER = 100
 DISTANCE_MARGIN = 10
+
+REFINED_THRESHOLD_PARAMETER = 200
 
 # █▀▄▀█ █▀▀ ▀█▀ █░█ █▀█ █▀▄ █▀
 # █░▀░█ ██▄ ░█░ █▀█ █▄█ █▄▀ ▄█
 
-raw_image = cv2.imread(os.path.join(input_path, FILENAME))
-H, W ,C = raw_image.shape
+
 
 def preprocessing_step(image):    
     pre_processed_img = PreProcessor(image)
@@ -68,7 +73,7 @@ def preprocessing_step(image):
 def segmentation_step(image):
     seg = Segmentation(image)
     logger.minilogger("Applying Otsu's Thresholding")
-    segmented_image = seg.multi_threshold_otsu()
+    segmented_image = seg.multi_threshold_otsu(regions = SEGMENTED_REGIONS)
 
     cv2.imwrite(os.path.join(output_path, "segmentation_step.jpg"), segmented_image)
     logger.minilogger("segmentation_step.jpg saved")
@@ -135,7 +140,7 @@ def morphological_operator(image, operator, iterations=1):
 
     return edged_img
 
-def optimiser_operator(contours):
+def optimiser_operator(contours, aspect_ratio_threshold=0.5):
     area_list = []
     # logger.minilogger(f"Initial number of contours: {len(contours)}")
     
@@ -150,7 +155,7 @@ def optimiser_operator(contours):
 
     for index, contour in enumerate(contours):
         feature = cnt_analysis.compute_features(contour)
-        if feature["area"] < threshold_area:
+        if feature["area"] < threshold_area or feature["aspect_ratio"] < aspect_ratio_threshold:
 			# print(f"Removing Contour {index} with area {feature['area']}")
             removed_shape = contours.pop(index)
     
@@ -343,22 +348,57 @@ def line_color_bgr(i, saturation=0.9, value=0.9):
         int(r * 255)
     )
 
-def max_pool_down_up(image, k):
-    h, w = image.shape
+def point_in_rotated_box(point, box):
+    return cv2.pointPolygonTest(box, tuple(point), False) >= 0
 
-    h_trim = (h // k) * k
-    w_trim = (w // k) * k
-    img = image[:h_trim, :w_trim]
+def segments_intersect(p1, p2, q1, q2):
+    def ccw(a, b, c):
+        return (c[1]-a[1]) * (b[0]-a[0]) > (b[1]-a[1]) * (c[0]-a[0])
 
-    pooled = img.reshape(h_trim // k, k,w_trim // k, k).max(axis=(1, 3))
+    return (ccw(p1, q1, q2) != ccw(p2, q1, q2)) and \
+           (ccw(p1, p2, q1) != ccw(p1, p2, q2))
 
-    upsampled = cv2.resize(pooled, (w_trim, h_trim), interpolation=cv2.INTER_LINEAR)
+def line_intersects_rotated_box(p1, p2, rect):
+    box = cv2.boxPoints(rect)
+    box = np.array(box, dtype=np.float32)
+
+    # Case 1: endpoint inside box
+    if point_in_rotated_box(p1, box) or point_in_rotated_box(p2, box):
+        return True
+
+    # Case 2: line intersects any box edge
+    for i in range(4):
+        q1 = box[i]
+        q2 = box[(i + 1) % 4]
+        if segments_intersect(p1, p2, q1, q2):
+            return True
+
+    return False
+
+def calculate_orientation(point):
+    x1, y1, x2, y2 = point
+    if (x2-x1) == 0:
+        m = 0
+    else:
+        m = (y2-y1)/(x2-x1)
+    angle_rad = math.atan(m)
+    angle_deg = math.degrees(angle_rad)
+
+    if angle_deg < 0:
+        angle_deg += 180
+    
+    return angle_deg
+
+def calculate_length(point):
+    x1, y1, x2, y2 = point
+    length = np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+    return length
 
 
-    out = np.zeros_like(image)
-    out[:h_trim, :w_trim] = upsampled
 
-    return out
+
+
+
 
 
 
@@ -422,9 +462,11 @@ def contour_extraction_module():
     contours = contour_gerneration_step(image)
     original_number = len(contours)
 
-    logger.minilogger("Reducing the number of contours by setting mean as threshold")
+    logger.minilogger(f"Reducing the number of contours:({original_number}) by setting mean as threshold")
     
-    while True:
+    global reduced_contours
+    switch = 0
+    while switch < 10:
         # logger.minilogger("Optimising contours")
         # logger.minilogger(f"Current number of contours: {len(contours)}")
         
@@ -445,10 +487,13 @@ def contour_extraction_module():
         cv2.imwrite(os.path.join(output_path, "contour_drawing_step" + file_name), canvas)
         
         # logger.minilogger(f"contour_drawing_step{file_name} saved")
-    
+        switch += 1
         if len(contours) < CONTOUR_NUMBER_FILTER:
+            reduced_contours = contours
             cv2.imwrite(os.path.join(output_path, "final_contours_step.jpg"), canvas)
             break
+        
+        
 
     logger.minilogger(f"Contour optimisation completed. Contours maintained: {len(contours)}")
     logger.minilogger("Final contours saved as: final_contours_step.jpg" )
@@ -462,17 +507,72 @@ def contour_extraction_module():
 
     logger.clog("Contour extraction and optimisation completed")
 
+def contour_refinement_module():
+    logger.clog("Starting Contour refinement module")
+    
+    image = cv2.imread(os.path.join(output_path, "final_contours_step.jpg"))
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    canvas = np.zeros_like(image)
+
+    logger.minilogger("Applying Line Segment Detector")
+    lsd = cv2.createLineSegmentDetector(
+        refine=cv2.LSD_REFINE_STD
+    )
 
 
-# █▀▀ █▀█ █▄░█ ▀█▀ █▀█ █░█ █▀█   █▀█ █▀▀ █▀▀ █ █▄░█ █ █▄░█ █▀▀
-# █▄▄ █▄█ █░▀█ ░█░ █▄█ █▄█ █▀▄   █▀▄ ██▄ █▀░ █ █░▀█ █ █░▀█ █▄█
+    lines, widths, precisions, _ = lsd.detect(gray_image)
 
-def contour_image_refinement():
-	image = cv2.imread(os.path.join(output_path, "final_contours_step.jpg"))
-	output = max_pool_down_up(edges, 20)
-	median_filtered_img = cv2.medianBlur(output, 25)
-	cv2.imwrite(os.path.join(output_path, "final_contours_step_DU.jpg"), final_image)
+    img_color = cv2.cvtColor(gray_image, cv2.COLOR_GRAY2BGR)
 
+    distances = []
+    pts = []
+    if lines is not None:
+        for line in lines:
+            x1, y1, x2, y2 = map(int, line[0])
+            distance = np.sqrt((x1 - x2)**2 + (y1 - y2)**2)
+            distances.append(distance)
+            pts.append((x1, x2, y1, y2))
+            cv2.line(img_color, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+    mean = 0.9*max(distances)
+    logger.minilogger(f"Distance Threshold: {mean}")
+  
+    angles = []
+    for pt in pts:
+        angle = calculate_orientation(pt)
+        angles.append(angle)
+    
+    counts , bins = np.histogram(angles, bins=100)
+    max_frequency = 0.75*max(counts)
+    logger.minilogger(f"Angle Threshold frequency: {max_frequency}")
+
+    limits = []
+    for i, hist in enumerate(zip(bins, counts)):
+        bin, count = hist
+        if count > max_frequency:
+            if i == 0:
+                lower = 0
+                upper = bin
+            else:
+                lower = bins[i-1]
+                upper = bin
+            logger.minilogger(f"Orientation bins chosen are: {lower} and {upper}")
+            limits.append((lower, upper))
+
+    canvas = np.zeros_like(img_color)
+    if lines is not None:
+        for line in lines:
+            x1, y1, x2, y2 = map(int, line[0])
+            for limit in limits:
+                lower, upper = limit
+                angle = calculate_orientation((x1, x2, y1, y2))
+                length = calculate_length((x1, x2, y1, y2))
+                if angle >= lower and angle <= upper:
+                    if length >= mean:
+                        cv2.line(canvas, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+    cv2.imwrite(os.path.join(output_path, "contour_refined_segments.jpg") , img_color)
+    cv2.imwrite(os.path.join(output_path, "contour_refined_step.jpg") , canvas)
 
 
 # █▀▀ █▀▀ ▄▀█ ▀█▀ █░█ █▀█ █▀▀   █▀▀ ▀▄▀ ▀█▀ █▀█ ▄▀█ █▀▀ ▀█▀ █ █▀█ █▄░█
@@ -482,9 +582,11 @@ def contour_image_refinement():
 def feature_extraction_module():
     logger.clog("Applying Hough Line Detection on the final morphed image")
     
-    image = cv2.imread(os.path.join(output_path, "final_contours_step_DU.jpg"), cv2.IMREAD_GRAYSCALE)
+    image = cv2.imread(os.path.join(output_path, "final_contours_step.jpg"), cv2.IMREAD_GRAYSCALE)
+    # image = cv2.imread(os.path.join(input_path, "final.jpg"), cv2.IMREAD_GRAYSCALE)
     ori_image1 = cv2.imread(os.path.join(input_path, FILENAME))
     ori_image2 = cv2.imread(os.path.join(input_path, FILENAME))
+    canvas = np.zeros_like(image)
 
     logger.minilogger("Detecting lines using Standard Hough Transform and Probabilistic Hough Transform")
 
@@ -492,6 +594,8 @@ def feature_extraction_module():
     standard_lines = hough_obj.detect_standard(rho=1.0, theta=np.pi/180, threshold=THRESHOLD_PROBAB)
     probabilistic_lines = hough_obj.detect_probabilistic(rho=1.0, theta=np.pi/180, threshold=THRESHOLD_PROBAB, min_line_length=MIN_LINE_LENGTH, max_line_gap=MAX_LINE_GAP)
 
+    if probabilistic_lines is None:
+        print("Unable to detect lines. Reduce Parameters.")
     logger.minilogger(f"Number of Probabilistic Hough lines detected: {probabilistic_lines.shape[0]}")
 
     slopes = []
@@ -539,8 +643,30 @@ def feature_extraction_module():
     logger.minilogger(f"Reduced probabilistic list: {len(reduced_probability_points)}")
     logger.minilogger(f"Number of Standard Hough lines detected: {standard_lines.shape[0]}")
     
-    standard_lines = conversion_to_cartesian(standard_lines, ori_image1.shape[:2])
+
+    # Drawing part
+
+    for pt in reduced_probability_points:
+        x1, y1, x2, y2 = pt 
+        cv2.line(ori_image1, (x1, y1), (x2, y2), (0,255,0), 2)
+        cv2.line(canvas, (x1, y1), (x2, y2), (255,255,255), 2)
+
+    cv2.imwrite(os.path.join(output_path, "hough_lines_detected_black_canvas.jpg"), canvas)
+    cv2.imwrite(os.path.join(output_path, "hough_lines_detected_modified_plus_probab.jpg"), ori_image1)
+    logger.clog("Hough Line Detection completed and saved as: hough_lines_detected_modified_plus_probab.jpg")
+
+    # cv2.imwrite(os.path.join(output_path, "hough_lines_detected_modified_plus_standard.jpg"), ori_image2)
+    # logger.clog("Hough Line Detection completed and saved as: hough_lines_detected_modified_plus_standard.jpg")
     
+    hough_obj_standard = HoughLineDetector(canvas)
+    standard_lines = hough_obj_standard.detect_standard(rho=1.0, theta=np.pi/180, threshold=THRESHOLD_PROBAB)
+    
+    if standard_lines is not None:
+        standard_lines = conversion_to_cartesian(standard_lines, ori_image1.shape[:2])
+    else:
+        logger.clog("No standard lines detected.")
+        return
+
     std_lines_reduced_ang = []
     tmp = []
     for line in standard_lines:
@@ -553,7 +679,10 @@ def feature_extraction_module():
                 std_lines_reduced_ang.append(line)
                 tmp.append(theta_d)            
 
-    logger.minilogger(f"Standard Lines after angular elimination: {len(std_lines_reduced_ang)}, min value: {min(tmp)}, max value: {max(tmp)}")
+    if len(tmp) > 0: 
+        logger.minilogger(f"Standard Lines after angular elimination: {len(std_lines_reduced_ang)}, min value: {min(tmp)}, max value: {max(tmp)}")
+    else:
+        logger.minilogger(f"No standard line detected")
     del tmp
 
     standard_lines_reduced = []
@@ -590,14 +719,6 @@ def feature_extraction_module():
                 continue
 
     logger.minilogger(f"Standard line after proximity reduction: {len(standard_lines_reduced)}")
-    # Drawing part
-
-    for pt in reduced_probability_points:
-        x1, y1, x2, y2 = pt 
-        cv2.line(ori_image1, (x1, y1), (x2, y2), (0,255,0), 2)
-
-    cv2.imwrite(os.path.join(output_path, "hough_lines_detected_modified_plus_probab.jpg"), ori_image1)
-    logger.clog("Hough Line Detection completed and saved as: hough_lines_detected_modified_plus_probab.jpg")
 
     for pt in standard_lines_reduced:
         x1, y1, x2, y2 = pt
@@ -605,9 +726,80 @@ def feature_extraction_module():
 
     cv2.imwrite(os.path.join(output_path, "hough_lines_detected_modified_plus_standard.jpg"), ori_image2)
     logger.clog("Hough Line Detection completed and saved as: hough_lines_detected_modified_plus_standard.jpg")
+
+def feature_extraction_step_extra():
+    image = cv2.imread(os.path.join(output_path, "contour_refined_step.jpg"))
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    ori_image = cv2.imread(os.path.join(output_path, "hough_lines_detected_modified_plus_standard.jpg"))
+
+    hough_obj = HoughLineDetector(gray_image)
+    standard_lines = hough_obj.detect_standard(rho=2.0, theta=np.pi/180, threshold=REFINED_THRESHOLD_PARAMETER)
     
+    standard_lines = conversion_to_cartesian(standard_lines, ori_image.shape[:2])
+    
+    std_lines_reduced_ang = []
+    tmp = []
+    for line in standard_lines:
+        theta_d = slope_calc_operator(line)
+        
+        for angles in angle_maxing:
+            mini, maxi = angles
 
+            if theta_d <= maxi and theta_d >= mini:
+                std_lines_reduced_ang.append(line)
+                tmp.append(theta_d)            
 
+    if len(tmp) > 0: 
+        logger.minilogger(f"Standard Lines after angular elimination: {len(std_lines_reduced_ang)}, min value: {min(tmp)}, max value: {max(tmp)}")
+    else:
+        logger.minilogger(f"No standard line detected")
+    del tmp
+
+    standard_lines_reduced = []
+
+    for line in std_lines_reduced_ang:
+        x1, y1, x2, y2 = line
+        
+        dx = x1 - x2
+        dy = y1 - y2
+
+        if dx != 0 and dy !=0:
+            a = 1/dx
+            b = -1/dy 
+            c = y1/dy - x1/dx
+
+        else:
+            a = 0
+            b = 0
+            c = 0
+
+        for pline in reduced_probability_points:
+            if a == 0 or b == 0:
+                d1 = 1000
+                d2 = 1000
+            else:
+                xp1, yp1, xp2, yp2 = pline
+                d1 = (a*xp1 + b*yp1 + c)/np.sqrt(a**2 + b**2)
+                d2 = (a*xp2 + b*yp2 + c)/np.sqrt(a**2 + b**2)
+
+            if abs(d1) < DISTANCE_MARGIN and abs(d2) < DISTANCE_MARGIN:
+                standard_lines_reduced.append(line)
+                break
+            else:
+                continue
+
+    logger.minilogger(f"Standard line after proximity reduction: {len(standard_lines_reduced)}")
+
+    for pt in standard_lines_reduced:
+        x1, y1, x2, y2 = pt
+        cv2.line(ori_image, (x1, y1), (x2, y2), (0,0,255), 2)
+
+    cv2.imwrite(os.path.join(output_path, "Standard_line_detection_refined.jpg"), ori_image)
+    # if standard_lines is not None:
+    #     drawing_std = hough_obj.draw_standard(ori_image, standard_lines)
+        
+    # else:
+    #     print("No lines were Detected")
 
 # █▀█ █▀▀ █▀ █░█ █░░ ▀█▀   █▀▀ ▄▀█ █░░ █▀▀ █░█ █░░ ▄▀█ ▀█▀ █ █▀█ █▄░█ █▀
 # █▀▄ ██▄ ▄█ █▄█ █▄▄ ░█░   █▄▄ █▀█ █▄▄ █▄▄ █▄█ █▄▄ █▀█ ░█░ █ █▄█ █░▀█ ▄█
@@ -615,8 +807,10 @@ def feature_extraction_module():
 
 def result_calculation_module():
     image = cv2.imread(os.path.join(output_path, "hough_lines_detected_modified_plus_standard.jpg"))
-    
+    # image2 = cv2.imread(os.path.join(output_path, "hough_lines_detected_modified_plus_standard.jpg"))
+
     logger.clog("Creating Bounding Boxes")
+    # logger.clog("Creating Bounding Boxes - tight")
 
     thick = 10
     bb_coord = []
@@ -633,14 +827,34 @@ def result_calculation_module():
         # h = abs(mny - mxy) + 25
         # bb_coord.append((mnx, mny, w, h))
         bb_coord.append((mnx, mny, mxx, mxy))
+        
+        
 
     for i in range(len(bb_coord)):
         x1, y1, x2, y2 = bb_coord[i]
         color = line_color_bgr(i)
         cv2.rectangle(image, (x1,y1), (x2,y2), color, 2)
 
+    # for pt in reduced_probability_points:
+    #     x1, y1, x2, y2= pt
+    #     p1 = (x1, y1)
+    #     p2 = (x2, y2)
+
+    #     for i, cnt in enumerate(reduced_contours):
+    #         rect = cv2.minAreaRect(cnt)
+    #         box = cv2.boxPoints(rect)
+    #         box = np.array(box, dtype=np.float32)
+    #         if line_intersects_rotated_box(p1, p2, rect):
+    #             box = np.int0(box)
+    #             color = line_color_bgr(i)
+    #             cv2.drawContours(image2, [box], 0, color, 2)
+    #         else:
+    #             continue
+        
+				
     cv2.imwrite(os.path.join(output_path, "BB_image.jpg"), image)
-    logger.clog('Successfully created Bounding Box image')
+    # cv2.imwrite(os.path.join(output_path, "BB_image_tight.jpg"), image2)
+    logger.clog('Successfully created Bounding Box image - normal')
 
 
 
@@ -654,10 +868,13 @@ if __name__ == "__main__":
     
     logger.clog("Pipeline started")
     logger.clog(f"Image filename: {FILENAME} with shape H:{H}, W:{W}, C:{C}")
+    
     preprocessing_module()
     edge_detection_module()
     contour_extraction_module()
+    contour_refinement_module()
     feature_extraction_module()
+    feature_extraction_step_extra()
     result_calculation_module()
 
     logger.clog("Pipeline completed")
